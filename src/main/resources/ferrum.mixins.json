@@ -6,6 +6,9 @@
   "mixins": [
     "network.compression.CompressionDecoderMixin",
     "network.compression.CompressionEncoderMixin",
+    "network.encryption.CipherDecoderMixin",
+    "network.encryption.CipherEncoderMixin",
+    "network.encryption.CryptMixin",
     "storage.compression.RegionFileVersionMixin"
   ],
   "injectors": {

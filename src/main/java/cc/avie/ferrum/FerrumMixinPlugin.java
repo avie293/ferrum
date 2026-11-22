@@ -21,7 +21,8 @@ public final class FerrumMixinPlugin implements IMixinConfigPlugin {
      * Mods that replace the code an option optimizes. Applying both would at best do the work twice.
      */
     private static final Map<String, List<String>> CONFLICTS = Map.of(
-            "network.compression", List.of("krypton")
+            "network.compression", List.of("krypton"),
+            "network.encryption", List.of("krypton")
     );
 
     private FerrumConfig config;
