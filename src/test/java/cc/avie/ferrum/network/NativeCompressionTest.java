@@ -33,6 +33,29 @@ class NativeCompressionTest {
         assertNull(field(CompressionDecoder.class, "inflater").get(new CompressionDecoder(THRESHOLD, true)));
     }
 
+    @Test
+    void unusedEncodeBufferIsNotAllocated() throws ReflectiveOperationException {
+        byte[] buffer = (byte[]) field(CompressionEncoder.class, "encodeBuf").get(new CompressionEncoder(THRESHOLD));
+        assertEquals(0, buffer.length);
+    }
+
+    /**
+     * Connections handled by the same thread share its native streams.
+     */
+    @Test
+    void interleavedConnectionsOnOneThread() {
+        EmbeddedChannel first = new EmbeddedChannel(new CompressionEncoder(THRESHOLD));
+        EmbeddedChannel second = new EmbeddedChannel(new CompressionEncoder(THRESHOLD));
+        for (int i = 0; i < 6; i++) {
+            byte[] payload = payload(1000 + i * 30_000);
+            EmbeddedChannel channel = i % 2 == 0 ? first : second;
+            channel.writeOutbound(Unpooled.wrappedBuffer(payload));
+            assertArrayEquals(payload, decode(channel.readOutbound()));
+        }
+        first.finishAndReleaseAll();
+        second.finishAndReleaseAll();
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 255, 256, 4096, 100_000, 2_000_000, 8_388_608})
     void roundTrip(int length) {
