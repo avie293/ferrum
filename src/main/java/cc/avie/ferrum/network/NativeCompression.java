@@ -9,6 +9,7 @@ import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
 import java.util.List;
 import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
 import net.minecraft.network.CompressionDecoder;
 import net.minecraft.network.VarInt;
 
@@ -18,8 +19,14 @@ import net.minecraft.network.VarInt;
  * <p>Unlike vanilla, packets are compressed straight from and into Netty's direct buffers instead of being copied
  * through temporary heap arrays. Buffers that cannot be addressed directly are copied into a pooled direct buffer
  * first, so every buffer type keeps working.
+ *
+ * <p>The streams are reset for every packet, so they do not need to belong to a connection. They are kept per thread
+ * instead, which in practice means one per Netty event loop thread rather than one per connection.
  */
 public final class NativeCompression {
+    private static final ThreadLocal<ZlibDeflater> DEFLATER =
+            ThreadLocal.withInitial(() -> new ZlibDeflater(Deflater.DEFAULT_COMPRESSION));
+    private static final ThreadLocal<ZlibInflater> INFLATER = ThreadLocal.withInitial(ZlibInflater::new);
     private NativeCompression() {
     }
 
@@ -41,8 +48,7 @@ public final class NativeCompression {
     /**
      * [VanillaCopy] {@code CompressionEncoder#encode}
      */
-    public static void encode(ZlibDeflater deflater, int threshold, ChannelHandlerContext ctx, ByteBuf uncompressed,
-            ByteBuf out) {
+    public static void encode(int threshold, ChannelHandlerContext ctx, ByteBuf uncompressed, ByteBuf out) {
         int length = uncompressed.readableBytes();
         if (length > CompressionDecoder.MAXIMUM_UNCOMPRESSED_LENGTH) {
             throw new IllegalArgumentException("Packet too big (is " + length + ", should be less than 8388608)");
@@ -63,7 +69,7 @@ public final class NativeCompression {
                 : DirectBuffers.copyToDirect(ctx, uncompressed, length);
         ByteBuf dst = DirectBuffers.isAddressable(out) ? out : ctx.alloc().directBuffer(bound);
         try {
-            long written = deflater.deflate(DirectBuffers.address(src, src.readerIndex(), length), length,
+            long written = DEFLATER.get().deflate(DirectBuffers.address(src, src.readerIndex(), length), length,
                     DirectBuffers.address(dst, dst.writerIndex(), bound), bound);
             if (written < 0) {
                 throw new EncoderException("Failed to compress packet of " + length + " bytes");
@@ -87,8 +93,8 @@ public final class NativeCompression {
     /**
      * [VanillaCopy] {@code CompressionDecoder#decode}
      */
-    public static void decode(ZlibInflater inflater, int threshold, boolean validateDecompressed,
-            ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws DataFormatException {
+    public static void decode(int threshold, boolean validateDecompressed, ChannelHandlerContext ctx, ByteBuf in,
+            List<Object> out) throws DataFormatException {
         int uncompressedLength = VarInt.read(in);
         if (uncompressedLength == 0) {
             out.add(in.readBytes(in.readableBytes()));
@@ -110,7 +116,7 @@ public final class NativeCompression {
         ByteBuf src = DirectBuffers.isAddressable(in) ? in : DirectBuffers.copyToDirect(ctx, in, compressedLength);
         ByteBuf output = ctx.alloc().directBuffer(uncompressedLength);
         try {
-            long written = inflater.inflate(DirectBuffers.address(src, src.readerIndex(), compressedLength),
+            long written = INFLATER.get().inflate(DirectBuffers.address(src, src.readerIndex(), compressedLength),
                     compressedLength, DirectBuffers.address(output, 0, uncompressedLength), uncompressedLength);
             if (written < 0) {
                 throw new DataFormatException("Malformed compressed packet");
