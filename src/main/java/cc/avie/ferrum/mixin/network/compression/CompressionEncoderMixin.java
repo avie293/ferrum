@@ -1,6 +1,7 @@
 package cc.avie.ferrum.mixin.network.compression;
 
 import cc.avie.ferrum.network.NativeCompression;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.netty.buffer.ByteBuf;
@@ -27,6 +28,14 @@ abstract class CompressionEncoderMixin extends MessageToByteEncoder<Object> {
     @WrapOperation(method = "<init>", at = @At(value = "NEW", target = "()Ljava/util/zip/Deflater;"))
     private Deflater ferrum$skipJdkDeflater(Operation<Deflater> original) {
         return null;
+    }
+
+    /**
+     * The 8 KiB transfer buffer is only used by the JDK deflater.
+     */
+    @ModifyExpressionValue(method = "<init>", at = @At(value = "CONSTANT", args = "intValue=8192"))
+    private int ferrum$skipEncodeBuffer(int size) {
+        return 0;
     }
 
     @Inject(method = "encode(Lio/netty/channel/ChannelHandlerContext;Lio/netty/buffer/ByteBuf;Lio/netty/buffer/ByteBuf;)V",
