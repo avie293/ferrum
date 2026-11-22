@@ -13,6 +13,8 @@ const ERR_DATA: i64 = -1;
 const ERR_BUFFER: i64 = -2;
 
 const WINDOW_BITS: u8 = 15;
+/// Window bits that select the gzip format instead of zlib, as in zlib itself.
+const GZIP_WINDOW_BITS: u8 = 16 + WINDOW_BITS;
 
 /// # Safety
 ///
@@ -50,6 +52,12 @@ pub extern "C" fn ferrum_deflater_new(level: i32) -> *mut Deflate {
 /// # Safety
 ///
 /// `deflater` must come from [`ferrum_deflater_new`] and must not be used afterwards.
+/// Creates a deflate stream that produces gzip instead of zlib streams.
+#[unsafe(no_mangle)]
+pub extern "C" fn ferrum_gzip_deflater_new(level: i32) -> *mut Deflate {
+    Box::into_raw(Box::new(Deflate::new(level, true, GZIP_WINDOW_BITS)))
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ferrum_deflater_free(deflater: *mut Deflate) {
     if !deflater.is_null() {
@@ -177,5 +185,45 @@ pub unsafe extern "C" fn ferrum_inflate_stream(
         // Input exhausted before the end of the stream
         Ok(_) => ERR_DATA,
         Err(_) => ERR_DATA,
+    }
+}
+
+/// Decompresses gzip data that may consist of several members, like `GZIPInputStream`.
+///
+/// Returns the number of bytes written, [`ERR_BUFFER`] if they do not fit into `dst_cap` (the
+/// caller retries with a larger buffer) or [`ERR_DATA`] if the data is malformed. Bytes after
+/// the last member that do not start another member are ignored, as the JDK does.
+///
+/// # Safety
+///
+/// Both buffers must be valid for their lengths.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ferrum_gunzip(
+    src: usize,
+    src_len: usize,
+    dst: usize,
+    dst_cap: usize,
+) -> i64 {
+    let mut src = unsafe { input(src, src_len) };
+    let dst = unsafe { output(dst, dst_cap) };
+    let mut written = 0;
+
+    loop {
+        // The state is not reused since resetting the stable API always selects the zlib format
+        let mut inflater = Inflate::new(true, GZIP_WINDOW_BITS);
+        let space = dst.len() - written;
+        match inflater.decompress(src, &mut dst[written..], InflateFlush::Finish) {
+            Ok(Status::StreamEnd) => {}
+            // A full output may still hold back data even if all input was consumed
+            Ok(_) if inflater.total_out() as usize == space => return ERR_BUFFER,
+            Ok(_) => return ERR_DATA,
+            Err(_) => return ERR_DATA,
+        }
+        written += inflater.total_out() as usize;
+        src = &src[inflater.total_in() as usize..];
+
+        if !src.starts_with(&[0x1f, 0x8b]) {
+            return written as i64;
+        }
     }
 }

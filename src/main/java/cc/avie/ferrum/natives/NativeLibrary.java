@@ -29,7 +29,7 @@ import org.jspecify.annotations.Nullable;
  * library that is still locked by another running instance never has to be replaced.
  */
 public final class NativeLibrary {
-    private static final int ABI_VERSION = 4;
+    private static final int ABI_VERSION = 5;
 
     private static final @Nullable SymbolLookup LOOKUP = load();
 

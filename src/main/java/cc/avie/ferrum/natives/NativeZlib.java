@@ -12,17 +12,19 @@ import java.lang.invoke.MethodHandle;
  */
 public final class NativeZlib {
     /**
-     * Returned by {@link #inflate} when the input is not a valid zlib stream.
+     * Returned by {@link #inflate}, {@link #inflateStream} and {@link #gunzip} when the input is malformed.
      */
     public static final long ERR_DATA = -1;
     /**
-     * Returned by {@link #deflate} and {@link #inflateStream} when the output buffer is too small.
+     * Returned by {@link #deflate}, {@link #inflateStream} and {@link #gunzip} when the output buffer is too small.
      */
     public static final long ERR_BUFFER = -2;
 
     private static final MethodHandle COMPRESS_BOUND = NativeLibrary.bind("ferrum_zlib_compress_bound",
             FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG));
     private static final MethodHandle DEFLATER_NEW = NativeLibrary.bind("ferrum_deflater_new",
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
+    private static final MethodHandle GZIP_DEFLATER_NEW = NativeLibrary.bind("ferrum_gzip_deflater_new",
             FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT));
     private static final MethodHandle DEFLATER_FREE = NativeLibrary.bind("ferrum_deflater_free",
             FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG));
@@ -32,6 +34,9 @@ public final class NativeZlib {
     private static final MethodHandle INFLATER_FREE = NativeLibrary.bind("ferrum_inflater_free",
             FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG));
     private static final MethodHandle INFLATE = NativeLibrary.bind("ferrum_inflate", transferDescriptor());
+    private static final MethodHandle GUNZIP = NativeLibrary.bind("ferrum_gunzip",
+            FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG,
+                    ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG));
     private static final MethodHandle INFLATE_STREAM = NativeLibrary.bind("ferrum_inflate_stream",
             transferDescriptor().appendArgumentLayouts(ValueLayout.JAVA_BOOLEAN));
 
@@ -67,6 +72,19 @@ public final class NativeZlib {
         }
     }
 
+    /**
+     * Creates a deflate stream producing gzip streams, which must be released with {@link #freeDeflater}.
+     *
+     * @param level the zlib compression level, {@code -1} for the default level
+     */
+    public static long newGzipDeflater(int level) {
+        try {
+            return (long) GZIP_DEFLATER_NEW.invokeExact(level);
+        } catch (Throwable t) {
+            throw new IllegalStateException(t);
+        }
+    }
+
     public static void freeDeflater(long deflater) {
         try {
             DEFLATER_FREE.invokeExact(deflater);
@@ -76,7 +94,8 @@ public final class NativeZlib {
     }
 
     /**
-     * Compresses {@code srcLength} bytes at {@code src} into a complete zlib stream at {@code dst}.
+     * Compresses {@code srcLength} bytes at {@code src} into a complete zlib or gzip stream at {@code dst}, depending
+     * on how the deflater was created.
      *
      * @return the length of the compressed stream, or {@link #ERR_BUFFER} if it does not fit into {@code dstCapacity}
      */
@@ -137,6 +156,21 @@ public final class NativeZlib {
             boolean reset) {
         try {
             return (long) INFLATE_STREAM.invokeExact(inflater, src, srcLength, dst, dstCapacity, reset);
+        } catch (Throwable t) {
+            throw new IllegalStateException(t);
+        }
+    }
+
+    /**
+     * Decompresses gzip data at {@code src}, which may consist of several members like {@code GZIPInputStream}
+     * accepts. Trailing bytes that do not start another member are ignored.
+     *
+     * @return the number of bytes written, {@link #ERR_BUFFER} if they do not fit into {@code dstCapacity}, or
+     * {@link #ERR_DATA} if the data is malformed
+     */
+    public static long gunzip(long src, long srcLength, long dst, long dstCapacity) {
+        try {
+            return (long) GUNZIP.invokeExact(src, srcLength, dst, dstCapacity);
         } catch (Throwable t) {
             throw new IllegalStateException(t);
         }

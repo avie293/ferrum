@@ -10,7 +10,7 @@ mod zlib;
 
 /// Version of the exported interface. The Java side refuses to use a library that reports a
 /// different value, which protects against stale extracted copies.
-const ABI_VERSION: u32 = 4;
+const ABI_VERSION: u32 = 5;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ferrum_abi_version() -> u32 {
