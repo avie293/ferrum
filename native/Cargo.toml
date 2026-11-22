@@ -8,6 +8,8 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+aes = { version = "0.9.4", features = ["zeroize"] }
+cfb8 = { version = "0.9.1", features = ["zeroize"] }
 zlib-rs = "0.6.8"
 
 [profile.release]
