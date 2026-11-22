@@ -29,6 +29,7 @@ public final class FerrumConfig {
 
     static {
         OPTIONS.put("network.compression", "Compress and decompress network packets with the native zlib.");
+        OPTIONS.put("storage.compression", "Compress and decompress chunks in region files with the native zlib.");
     }
 
     private final Map<String, Boolean> values;
