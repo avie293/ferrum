@@ -3,7 +3,10 @@
   "package": "cc.avie.ferrum.mixin",
   "plugin": "cc.avie.ferrum.FerrumMixinPlugin",
   "compatibilityLevel": "JAVA_25",
-  "mixins": [],
+  "mixins": [
+    "network.compression.CompressionDecoderMixin",
+    "network.compression.CompressionEncoderMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },
