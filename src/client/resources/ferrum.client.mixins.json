@@ -1,8 +1,11 @@
 {
   "required": true,
   "package": "cc.avie.ferrum.client.mixin",
+  "plugin": "cc.avie.ferrum.FerrumMixinPlugin",
   "compatibilityLevel": "JAVA_25",
-  "client": [],
+  "client": [
+    "texture.mipmaps.MipmapGeneratorMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },
