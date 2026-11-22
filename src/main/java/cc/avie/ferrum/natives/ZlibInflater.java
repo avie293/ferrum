@@ -31,6 +31,16 @@ public final class ZlibInflater implements AutoCloseable {
         return NativeZlib.inflate(this.handle, src, srcLength, dst, dstCapacity);
     }
 
+    /**
+     * Decompresses a zlib stream of unknown size; see {@link NativeZlib#inflateStream}.
+     */
+    public long inflateStream(long src, long srcLength, long dst, long dstCapacity, boolean reset) {
+        if (this.closed) {
+            throw new IllegalStateException("Inflater is closed");
+        }
+        return NativeZlib.inflateStream(this.handle, src, srcLength, dst, dstCapacity, reset);
+    }
+
     @Override
     public void close() {
         this.closed = true;

@@ -1,7 +1,7 @@
 //! One-shot zlib compression and decompression backed by `zlib-rs`.
 //!
-//! The streams are created once per network connection and reset before every call, which
-//! avoids reallocating the (fairly large) deflate state for each packet.
+//! Streams are created once per network connection or worker thread and reset before every
+//! call, which avoids reallocating the (fairly large) deflate state for each packet or chunk.
 
 use core::slice;
 
@@ -9,7 +9,7 @@ use zlib_rs::{Deflate, DeflateFlush, Inflate, InflateFlush, Status};
 
 /// Returned when the input is not a valid zlib stream.
 const ERR_DATA: i64 = -1;
-/// Returned when the output buffer is too small to hold the compressed stream.
+/// Returned when the output buffer is too small.
 const ERR_BUFFER: i64 = -2;
 
 const WINDOW_BITS: u8 = 15;
@@ -129,6 +129,53 @@ pub unsafe extern "C" fn ferrum_inflate(
     );
     match result {
         Ok(_) => inflater.total_out() as i64,
+        Err(_) => ERR_DATA,
+    }
+}
+
+/// Decompresses a complete zlib stream whose size is not known in advance.
+///
+/// Returns the total number of bytes written once the stream has ended. If the output fills up
+/// first, [`ERR_BUFFER`] is returned with the stream state kept: the caller then passes the same
+/// `src` again together with the remaining space of a larger output (`dst_cap` bytes at `dst`,
+/// placed directly after the bytes written so far) and `reset = false`. A stream that is
+/// truncated or malformed yields [`ERR_DATA`].
+///
+/// # Safety
+///
+/// `inflater` must be a live stream that is not used concurrently, and both buffers must be
+/// valid for their lengths.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ferrum_inflate_stream(
+    inflater: *mut Inflate,
+    src: usize,
+    src_len: usize,
+    dst: usize,
+    dst_cap: usize,
+    reset: bool,
+) -> i64 {
+    let inflater = unsafe { &mut *inflater };
+    if reset {
+        inflater.reset(true);
+    }
+
+    let consumed = inflater.total_in() as usize;
+    if consumed > src_len {
+        return ERR_DATA;
+    }
+    let src = unsafe { input(src, src_len) };
+    let written_before = inflater.total_out();
+    let result = inflater.decompress(
+        &src[consumed..],
+        unsafe { output(dst, dst_cap) },
+        InflateFlush::NoFlush,
+    );
+    match result {
+        Ok(Status::StreamEnd) => inflater.total_out() as i64,
+        // A full output may still hold back data even if all input was consumed
+        Ok(_) if inflater.total_out() - written_before == dst_cap as u64 => ERR_BUFFER,
+        // Input exhausted before the end of the stream
+        Ok(_) => ERR_DATA,
         Err(_) => ERR_DATA,
     }
 }

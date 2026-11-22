@@ -17,7 +17,7 @@ public final class NativeZlib {
      */
     public static final long ERR_DATA = -1;
     /**
-     * Returned by {@link #deflate} when the output buffer is too small.
+     * Returned by {@link #deflate} and {@link #inflateStream} when the output buffer is too small.
      */
     public static final long ERR_BUFFER = -2;
 
@@ -39,6 +39,8 @@ public final class NativeZlib {
     private static final MethodHandle INFLATER_FREE = NativeLibrary.bind("ferrum_inflater_free",
             FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG));
     private static final MethodHandle INFLATE = NativeLibrary.bind("ferrum_inflate", transferDescriptor());
+    private static final MethodHandle INFLATE_STREAM = NativeLibrary.bind("ferrum_inflate_stream",
+            transferDescriptor().appendArgumentLayouts(ValueLayout.JAVA_BOOLEAN));
 
     private NativeZlib() {
     }
@@ -123,6 +125,25 @@ public final class NativeZlib {
     public static long inflate(long inflater, long src, long srcLength, long dst, long dstCapacity) {
         try {
             return (long) INFLATE.invokeExact(inflater, src, srcLength, dst, dstCapacity);
+        } catch (Throwable t) {
+            throw new IllegalStateException(t);
+        }
+    }
+
+    /**
+     * Decompresses a complete zlib stream of unknown size, possibly over several calls.
+     *
+     * <p>If the output fills up first, {@link #ERR_BUFFER} is returned and the stream state is kept. The caller then
+     * calls again with the same {@code src}, {@code reset = false} and the remaining space of a larger output placed
+     * directly after the bytes written so far.
+     *
+     * @return the total number of bytes written once the stream ended, {@link #ERR_BUFFER} if more output space is
+     * needed, or {@link #ERR_DATA} if the stream is truncated or malformed
+     */
+    public static long inflateStream(long inflater, long src, long srcLength, long dst, long dstCapacity,
+            boolean reset) {
+        try {
+            return (long) INFLATE_STREAM.invokeExact(inflater, src, srcLength, dst, dstCapacity, reset);
         } catch (Throwable t) {
             throw new IllegalStateException(t);
         }
