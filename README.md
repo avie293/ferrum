@@ -8,6 +8,7 @@ Ferrum replaces selected hot paths of Minecraft with native code written in Rust
 - Compressed packets are no longer copied into a temporary array first, unlike vanilla.
 - Online-mode connections are decrypted 5x and encrypted 1.7x faster with a native AES/CFB8 that decrypts many blocks in parallel.
 - Chunks are written to region files 2.7x and read 2.5x faster, measured on 2,445 chunks of a freshly generated world.
+- Mipmaps of cutout textures such as leaves, grass and glass are built 1.9x faster while loading resources (2.7x with 128x resource packs), with pixel-identical results.
 
 Native libraries are included for Windows (x64), Linux (x64, ARM64) and macOS (Intel, Apple Silicon). On any other system, or if the library cannot be loaded, the game simply uses vanilla code. Every optimization can be turned off separately in `config/ferrum.properties`, and the network optimizations turn themselves off when Krypton is installed.
 
