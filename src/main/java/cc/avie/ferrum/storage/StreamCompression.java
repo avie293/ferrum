@@ -20,7 +20,7 @@ import java.util.zip.ZipException;
  * freeing the native zlib state each time. Here each thread keeps one native stream and its buffers, and a chunk is
  * compressed or decompressed in a single call.
  */
-public final class RegionCompression {
+public final class StreamCompression {
     /**
      * Larger buffers are released after use, so a single huge chunk does not pin memory for the thread's lifetime.
      */
@@ -29,7 +29,7 @@ public final class RegionCompression {
 
     private static final ThreadLocal<Context> CONTEXT = ThreadLocal.withInitial(Context::new);
 
-    private RegionCompression() {
+    private StreamCompression() {
     }
 
     public static OutputStream deflating(OutputStream out) {

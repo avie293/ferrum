@@ -1,6 +1,6 @@
 package cc.avie.ferrum.mixin.storage.compression;
 
-import cc.avie.ferrum.storage.RegionCompression;
+import cc.avie.ferrum.storage.StreamCompression;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -18,14 +18,14 @@ abstract class RegionFileVersionMixin {
     @Inject(method = "wrap(Ljava/io/InputStream;)Ljava/io/InputStream;", at = @At("HEAD"), cancellable = true)
     private void ferrum$wrapInput(InputStream in, CallbackInfoReturnable<InputStream> cir) throws IOException {
         if ((Object) this == RegionFileVersion.VERSION_DEFLATE) {
-            cir.setReturnValue(RegionCompression.inflate(in));
+            cir.setReturnValue(StreamCompression.inflate(in));
         }
     }
 
     @Inject(method = "wrap(Ljava/io/OutputStream;)Ljava/io/OutputStream;", at = @At("HEAD"), cancellable = true)
     private void ferrum$wrapOutput(OutputStream out, CallbackInfoReturnable<OutputStream> cir) {
         if ((Object) this == RegionFileVersion.VERSION_DEFLATE) {
-            cir.setReturnValue(RegionCompression.deflating(out));
+            cir.setReturnValue(StreamCompression.deflating(out));
         }
     }
 }

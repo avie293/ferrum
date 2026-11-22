@@ -41,7 +41,7 @@ final class DeflatingOutputStream extends OutputStream {
         }
         this.closed = true;
         try (this.out) {
-            RegionCompression.deflate(this.buffer, this.count, this.out);
+            StreamCompression.deflate(this.buffer, this.count, this.out);
         }
     }
 
