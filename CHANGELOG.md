@@ -7,5 +7,6 @@
 ### Performance
 - Sped up network packet compression by 1.5x and decompression by 2.2x by using the native `zlib-rs` instead of the JDK's zlib
 - Removed the temporary heap copy vanilla makes of every compressed packet
+- Sped up writing chunks to region files by 2.7x and reading them by 2.5x by compressing each chunk in one native call instead of streaming it through a new JDK `Deflater`/`Inflater`
 ### Compatibility
 - Network compression is turned off automatically when Krypton is installed
