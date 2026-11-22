@@ -5,6 +5,9 @@
 //! known up front. Decryption therefore encrypts many shift-register states at once, letting
 //! AES-NI or the ARMv8 crypto extensions work on several blocks in parallel.
 
+#[cfg(target_arch = "x86_64")]
+mod aesni;
+
 use core::slice;
 
 use aes::Aes128;
@@ -20,8 +23,13 @@ pub struct Cfb8 {
 }
 
 enum Mode {
+    #[cfg(target_arch = "x86_64")]
+    EncryptAesNi(aesni::Encryptor),
     Encrypt(Encryptor),
-    Decrypt { cipher: Aes128, register: [u8; 16] },
+    Decrypt {
+        cipher: Aes128,
+        register: [u8; 16],
+    },
 }
 
 /// Creates a cipher for one direction of a connection. Minecraft uses the shared secret as both
@@ -36,9 +44,12 @@ pub unsafe extern "C" fn ferrum_cfb8_new(key: usize, iv: usize, encrypt: bool) -
     let iv: &[u8; 16] = unsafe { &*(iv as *const [u8; 16]) };
 
     let mode = if encrypt {
-        Mode::Encrypt(Encryptor::new(&Array(*key), &Array(*iv)))
+        new_encryptor(key, iv)
     } else {
-        Mode::Decrypt { cipher: Aes128::new(&Array(*key)), register: *iv }
+        Mode::Decrypt {
+            cipher: Aes128::new(&Array(*key)),
+            register: *iv,
+        }
     };
     Box::into_raw(Box::new(Cfb8 { mode }))
 }
@@ -68,9 +79,21 @@ pub unsafe extern "C" fn ferrum_cfb8_update(cipher: *mut Cfb8, data: usize, len:
     let data = unsafe { slice::from_raw_parts_mut(data as *mut u8, len) };
 
     match &mut cipher.mode {
+        // SAFETY: only created after checking for AES-NI support
+        #[cfg(target_arch = "x86_64")]
+        Mode::EncryptAesNi(encryptor) => unsafe { encryptor.encrypt(data) },
         Mode::Encrypt(encryptor) => encryptor.encrypt(data),
         Mode::Decrypt { cipher, register } => decrypt(cipher, register, data),
     }
+}
+
+fn new_encryptor(key: &[u8; 16], iv: &[u8; 16]) -> Mode {
+    #[cfg(target_arch = "x86_64")]
+    if aesni::is_supported() {
+        // SAFETY: support was checked right above
+        return Mode::EncryptAesNi(unsafe { aesni::Encryptor::new(key, iv) });
+    }
+    Mode::Encrypt(Encryptor::new(&Array(*key), &Array(*iv)))
 }
 
 fn decrypt(cipher: &Aes128, register: &mut [u8; 16], data: &mut [u8]) {
@@ -102,5 +125,56 @@ fn decrypt(cipher: &Aes128, register: &mut [u8; 16], data: &mut [u8]) {
         for (byte, block) in chunk.iter_mut().zip(blocks.iter()) {
             *byte ^= block[0];
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn data(len: usize, seed: u32) -> Vec<u8> {
+        let mut state = seed;
+        (0..len)
+            .map(|_| {
+                state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                (state >> 16) as u8
+            })
+            .collect()
+    }
+
+    /// The streaming behaviour across calls of different sizes must not depend on the backend.
+    #[test]
+    fn backends_agree() {
+        let key: [u8; 16] = data(16, 1).try_into().unwrap();
+        let mut generic = Mode::Encrypt(Encryptor::new(&Array(key), &Array(key)));
+        let mut fast = new_encryptor(&key, &key);
+        let mut decryptor = Mode::Decrypt {
+            cipher: Aes128::new(&Array(key)),
+            register: key,
+        };
+
+        for (i, len) in [1, 15, 16, 17, 64, 65, 200, 3000, 0, 7]
+            .into_iter()
+            .enumerate()
+        {
+            let plain = data(len, i as u32);
+            let (mut a, mut b) = (plain.clone(), plain.clone());
+            update(&mut generic, &mut a);
+            update(&mut fast, &mut b);
+            assert_eq!(a, b);
+            update(&mut decryptor, &mut b);
+            assert_eq!(b, plain);
+        }
+    }
+
+    fn update(mode: &mut Mode, data: &mut [u8]) {
+        let mut cipher = Cfb8 {
+            mode: core::mem::replace(
+                mode,
+                Mode::Encrypt(Encryptor::new(&Array([0; 16]), &Array([0; 16]))),
+            ),
+        };
+        unsafe { ferrum_cfb8_update(&mut cipher, data.as_mut_ptr() as usize, data.len()) };
+        *mode = cipher.mode;
     }
 }
