@@ -7,7 +7,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.DecoderException;
 import io.netty.handler.codec.EncoderException;
-import java.lang.foreign.MemorySegment;
 import java.util.List;
 import java.util.zip.DataFormatException;
 import net.minecraft.network.CompressionDecoder;
@@ -59,11 +58,13 @@ public final class NativeCompression {
         int bound = (int) NativeZlib.compressBound(length);
         out.ensureWritable(bound);
 
-        ByteBuf src = isAddressable(uncompressed) ? uncompressed : copyToDirect(ctx, uncompressed, length);
-        ByteBuf dst = isAddressable(out) ? out : ctx.alloc().directBuffer(bound);
+        ByteBuf src = DirectBuffers.isAddressable(uncompressed)
+                ? uncompressed
+                : DirectBuffers.copyToDirect(ctx, uncompressed, length);
+        ByteBuf dst = DirectBuffers.isAddressable(out) ? out : ctx.alloc().directBuffer(bound);
         try {
-            long written = deflater.deflate(address(src, src.readerIndex(), length), length,
-                    address(dst, dst.writerIndex(), bound), bound);
+            long written = deflater.deflate(DirectBuffers.address(src, src.readerIndex(), length), length,
+                    DirectBuffers.address(dst, dst.writerIndex(), bound), bound);
             if (written < 0) {
                 throw new EncoderException("Failed to compress packet of " + length + " bytes");
             }
@@ -106,11 +107,11 @@ public final class NativeCompression {
         }
 
         int compressedLength = in.readableBytes();
-        ByteBuf src = isAddressable(in) ? in : copyToDirect(ctx, in, compressedLength);
+        ByteBuf src = DirectBuffers.isAddressable(in) ? in : DirectBuffers.copyToDirect(ctx, in, compressedLength);
         ByteBuf output = ctx.alloc().directBuffer(uncompressedLength);
         try {
-            long written = inflater.inflate(address(src, src.readerIndex(), compressedLength), compressedLength,
-                    address(output, 0, uncompressedLength), uncompressedLength);
+            long written = inflater.inflate(DirectBuffers.address(src, src.readerIndex(), compressedLength),
+                    compressedLength, DirectBuffers.address(output, 0, uncompressedLength), uncompressedLength);
             if (written < 0) {
                 throw new DataFormatException("Malformed compressed packet");
             }
@@ -130,23 +131,5 @@ public final class NativeCompression {
                 src.release();
             }
         }
-    }
-
-    private static boolean isAddressable(ByteBuf buf) {
-        return buf.hasMemoryAddress() || buf.isDirect() && buf.nioBufferCount() == 1;
-    }
-
-    private static long address(ByteBuf buf, int index, int length) {
-        if (buf.hasMemoryAddress()) {
-            return buf.memoryAddress() + index;
-        }
-        // Netty only exposes raw addresses when it may use Unsafe, which is not the default on recent JDKs
-        return MemorySegment.ofBuffer(buf.internalNioBuffer(index, length)).address();
-    }
-
-    private static ByteBuf copyToDirect(ChannelHandlerContext ctx, ByteBuf buf, int length) {
-        ByteBuf copy = ctx.alloc().directBuffer(length);
-        copy.writeBytes(buf, buf.readerIndex(), length);
-        return copy;
     }
 }

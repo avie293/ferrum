@@ -16,7 +16,7 @@ public final class ZlibInflater implements AutoCloseable {
     public ZlibInflater() {
         long handle = NativeZlib.newInflater();
         this.handle = handle;
-        this.cleanable = NativeZlib.CLEANER.register(this, () -> NativeZlib.freeInflater(handle));
+        this.cleanable = NativeCleaner.CLEANER.register(this, () -> NativeZlib.freeInflater(handle));
     }
 
     /**

@@ -3,7 +3,6 @@ package cc.avie.ferrum.natives;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
-import java.lang.ref.Cleaner;
 
 /**
  * Bindings for the native zlib routines.
@@ -20,12 +19,6 @@ public final class NativeZlib {
      * Returned by {@link #deflate} and {@link #inflateStream} when the output buffer is too small.
      */
     public static final long ERR_BUFFER = -2;
-
-    /**
-     * Frees streams that were never closed explicitly, for example when a connection is dropped before its
-     * handlers are removed.
-     */
-    static final Cleaner CLEANER = Cleaner.create();
 
     private static final MethodHandle COMPRESS_BOUND = NativeLibrary.bind("ferrum_zlib_compress_bound",
             FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG));

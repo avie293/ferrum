@@ -19,7 +19,7 @@ public final class ZlibDeflater implements AutoCloseable {
     public ZlibDeflater(int level) {
         long handle = NativeZlib.newDeflater(level);
         this.handle = handle;
-        this.cleanable = NativeZlib.CLEANER.register(this, () -> NativeZlib.freeDeflater(handle));
+        this.cleanable = NativeCleaner.CLEANER.register(this, () -> NativeZlib.freeDeflater(handle));
     }
 
     /**
