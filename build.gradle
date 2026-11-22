@@ -27,6 +27,23 @@ dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+
+    testImplementation "net.fabricmc:fabric-loader-junit:${fabric_loader_version}"
+    testImplementation platform("org.junit:junit-bom:${junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    // Same as the Minecraft launcher
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    // Keep the extracted native library and the config file out of the project directory
+    def testRunDir = layout.buildDirectory.dir('test-run').get().asFile
+    workingDir = testRunDir
+    doFirst {
+        testRunDir.mkdirs()
+    }
 }
 
 // Native library: built with cargo for the current platform, or taken from a directory of
