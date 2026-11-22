@@ -10,6 +10,9 @@ run/
 runs/
 **/src/generated/**/.cache/
 
+# Rust
+native/target/
+
 # IntelliJ IDEA
 .idea/
 *.iml

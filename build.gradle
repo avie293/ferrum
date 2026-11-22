@@ -29,6 +29,37 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
 }
 
+// Native library: built with cargo for the current platform, or taken from a directory of
+// prebuilt libraries laid out as <platform>/<library> (used by CI to bundle every platform).
+def hostPlatform = {
+    def os = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+    def arch = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+    def osName = os.contains('win') ? 'windows' : os.contains('mac') ? 'macos' : 'linux'
+    def archName = arch in ['amd64', 'x86_64'] ? 'x86_64' : arch in ['aarch64', 'arm64'] ? 'aarch64' : arch
+    return "${osName}-${archName}"
+}()
+def nativeLibraryName = hostPlatform.startsWith('windows') ? 'ferrum.dll'
+        : hostPlatform.startsWith('macos') ? 'libferrum.dylib' : 'libferrum.so'
+def prebuiltNatives = providers.gradleProperty('natives_dir')
+
+def cargoBuild = tasks.register('cargoBuild', Exec) {
+    workingDir = file('native')
+    commandLine 'cargo', 'build', '--release', '--locked'
+    inputs.files(fileTree('native') { exclude 'target/**' })
+    outputs.file("native/target/release/${nativeLibraryName}")
+}
+
+def collectNatives = tasks.register('collectNatives', Sync) {
+    into layout.buildDirectory.dir('generated/natives')
+    if (prebuiltNatives.isPresent()) {
+        from(prebuiltNatives) { into 'natives' }
+    } else {
+        from(cargoBuild) { into "natives/${hostPlatform}" }
+    }
+}
+
+sourceSets.main.resources.srcDir(collectNatives)
+
 java {
     withSourcesJar()
     toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
@@ -59,6 +90,10 @@ processResources {
     filesMatching('fabric.mod.json') {
         expand props
     }
+}
+
+sourcesJar {
+    exclude 'natives/**'
 }
 
 jar {
