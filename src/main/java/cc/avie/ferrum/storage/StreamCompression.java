@@ -27,7 +27,7 @@ public final class StreamCompression {
      * Larger buffers are released after use, so a single huge chunk or file does not pin memory for the thread's
      * lifetime.
      */
-    private static final long MAX_RETAINED_BUFFER = 4 << 20;
+    private static final long MAX_RETAINED_BUFFER = 1 << 20;
     private static final long MIN_INFLATE_BUFFER = 64 << 10;
     /**
      * Gzip files that decompress to more than this are left to the JDK's streaming implementation, so the size limits
