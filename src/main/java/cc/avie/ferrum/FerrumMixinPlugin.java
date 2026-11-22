@@ -12,11 +12,10 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 /**
  * Applies a mixin only if its option is enabled, the native library is available and no mod that replaces the same
- * code is installed. The option of a mixin is its package relative to {@code cc.avie.ferrum.mixin}.
+ * code is installed. The option of a mixin is its package relative to the {@code mixin} package of its config, for
+ * example {@code network.compression} for {@code cc.avie.ferrum.mixin.network.compression}.
  */
 public final class FerrumMixinPlugin implements IMixinConfigPlugin {
-    private static final String MIXIN_PACKAGE = "cc.avie.ferrum.mixin.";
-
     /**
      * Mods that replace the code an option optimizes. Applying both would at best do the work twice.
      */
@@ -25,31 +24,34 @@ public final class FerrumMixinPlugin implements IMixinConfigPlugin {
             "network.encryption", List.of("krypton")
     );
 
-    private FerrumConfig config;
-    private boolean nativesAvailable;
+    // Shared by the plugin instances of all mixin configs, so the file is read and conflicts are logged once
+    private static final FerrumConfig CONFIG = FerrumConfig.load();
 
-    @Override
-    public void onLoad(String mixinPackage) {
-        this.config = FerrumConfig.load();
-        this.nativesAvailable = NativeLibrary.isAvailable();
-
+    static {
         for (Map.Entry<String, List<String>> entry : CONFLICTS.entrySet()) {
             for (String modId : entry.getValue()) {
-                if (this.config.isEnabled(entry.getKey()) && FabricLoader.getInstance().isModLoaded(modId)) {
+                if (CONFIG.isEnabled(entry.getKey()) && FabricLoader.getInstance().isModLoaded(modId)) {
                     Ferrum.LOGGER.info("Disabling {} because {} is installed", entry.getKey(), modId);
                 }
             }
         }
     }
 
+    private String mixinPackage;
+
+    @Override
+    public void onLoad(String mixinPackage) {
+        this.mixinPackage = mixinPackage + ".";
+    }
+
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        if (!this.nativesAvailable || !mixinClassName.startsWith(MIXIN_PACKAGE)) {
+        if (!NativeLibrary.isAvailable() || !mixinClassName.startsWith(this.mixinPackage)) {
             return false;
         }
 
-        String option = mixinClassName.substring(MIXIN_PACKAGE.length(), mixinClassName.lastIndexOf('.'));
-        if (!this.config.isEnabled(option)) {
+        String option = mixinClassName.substring(this.mixinPackage.length(), mixinClassName.lastIndexOf('.'));
+        if (!CONFIG.isEnabled(option)) {
             return false;
         }
         for (String modId : CONFLICTS.getOrDefault(option, List.of())) {
