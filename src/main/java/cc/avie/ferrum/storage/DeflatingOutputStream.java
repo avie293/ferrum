@@ -6,16 +6,18 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Collects the uncompressed chunk data and writes it to the wrapped stream as one zlib stream when closed.
+ * Collects the uncompressed data and writes it to the wrapped stream as one zlib or gzip stream when closed.
  */
 final class DeflatingOutputStream extends OutputStream {
     private final OutputStream out;
+    private final boolean gzip;
     private byte[] buffer = new byte[32 << 10];
     private int count;
     private boolean closed;
 
-    DeflatingOutputStream(OutputStream out) {
+    DeflatingOutputStream(OutputStream out, boolean gzip) {
         this.out = out;
+        this.gzip = gzip;
     }
 
     @Override
@@ -41,7 +43,7 @@ final class DeflatingOutputStream extends OutputStream {
         }
         this.closed = true;
         try (this.out) {
-            StreamCompression.deflate(this.buffer, this.count, this.out);
+            StreamCompression.deflate(this.buffer, this.count, this.out, this.gzip);
         }
     }
 
@@ -53,7 +55,7 @@ final class DeflatingOutputStream extends OutputStream {
 
     private void ensureCapacity(int capacity) {
         if (capacity < 0) {
-            throw new OutOfMemoryError("Chunk data is too large");
+            throw new OutOfMemoryError("Data is too large to compress at once");
         }
         if (capacity > this.buffer.length) {
             this.buffer = Arrays.copyOf(this.buffer, Math.max(capacity, this.buffer.length * 2));

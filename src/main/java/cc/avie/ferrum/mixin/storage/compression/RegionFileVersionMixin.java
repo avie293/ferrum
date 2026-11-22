@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Handles the default {@code deflate} region compression natively; all other formats stay untouched.
+ * Handles the {@code deflate} (default) and gzip region compression natively; all other formats stay untouched.
  */
 @Mixin(RegionFileVersion.class)
 abstract class RegionFileVersionMixin {
@@ -19,13 +19,17 @@ abstract class RegionFileVersionMixin {
     private void ferrum$wrapInput(InputStream in, CallbackInfoReturnable<InputStream> cir) throws IOException {
         if ((Object) this == RegionFileVersion.VERSION_DEFLATE) {
             cir.setReturnValue(StreamCompression.inflate(in));
+        } else if ((Object) this == RegionFileVersion.VERSION_GZIP) {
+            cir.setReturnValue(StreamCompression.gunzip(in));
         }
     }
 
     @Inject(method = "wrap(Ljava/io/OutputStream;)Ljava/io/OutputStream;", at = @At("HEAD"), cancellable = true)
     private void ferrum$wrapOutput(OutputStream out, CallbackInfoReturnable<OutputStream> cir) {
         if ((Object) this == RegionFileVersion.VERSION_DEFLATE) {
-            cir.setReturnValue(StreamCompression.deflating(out));
+            cir.setReturnValue(StreamCompression.deflating(out, false));
+        } else if ((Object) this == RegionFileVersion.VERSION_GZIP) {
+            cir.setReturnValue(StreamCompression.deflating(out, true));
         }
     }
 }

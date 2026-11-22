@@ -9,7 +9,8 @@
     "network.encryption.CipherDecoderMixin",
     "network.encryption.CipherEncoderMixin",
     "network.encryption.CryptMixin",
-    "storage.compression.RegionFileVersionMixin"
+    "storage.compression.RegionFileVersionMixin",
+    "storage.nbt.NbtIoMixin"
   ],
   "injectors": {
     "defaultRequire": 1
